@@ -12,6 +12,11 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.synthetic.main.reminders_fragment.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 /**
  * A simple [Fragment] subclass as the default destination in the navigation.
@@ -50,18 +55,28 @@ class RemindersFragment : Fragment() {
     }
 
     private fun getRemindersFromDatabase() {
-        this@RemindersFragment.reminders.clear()
-        this@RemindersFragment.reminders.addAll(reminderRepository.getAllReminders())
-        reminderAdapter.notifyDataSetChanged()
+        CoroutineScope(Dispatchers.Main).launch {
+            val reminders = withContext(Dispatchers.IO) {
+                reminderRepository.getAllReminders()
+            }
+            this@RemindersFragment.reminders.clear()
+            this@RemindersFragment.reminders.addAll(reminders)
+            reminderAdapter.notifyDataSetChanged()
+        }
+
     }
 
     private fun observeAddReminderResult() {
         setFragmentResultListener(REQ_REMINDER_KEY) { _, bundle ->
             bundle.getString(BUNDLE_REMINDER_KEY)?.let {
-                val reminder = Reminder(reminderText = it)
 
-                reminderRepository.insertReminder(reminder)
-                getRemindersFromDatabase()
+                CoroutineScope(Dispatchers.Main).launch {
+                    withContext(Dispatchers.IO) {
+                        reminderRepository.insertReminder(Reminder(reminderText = it))
+                    }
+                    getRemindersFromDatabase()
+                }
+
             } ?: Log.e("ReminderFragment", "Request triggered, but received empty reminder text!")
         }
     }
@@ -79,8 +94,13 @@ class RemindersFragment : Fragment() {
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val position = viewHolder.adapterPosition
-                reminderRepository.deleteReminder(reminders[position])
-                getRemindersFromDatabase()
+
+                CoroutineScope(Dispatchers.Main).launch {
+                    withContext(Dispatchers.IO) {
+                        reminderRepository.deleteReminder(reminders[position])
+                    }
+                    getRemindersFromDatabase()
+                }
             }
         }
         return ItemTouchHelper(callback)
